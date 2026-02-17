@@ -35,3 +35,34 @@ Aur ye sab ek integrated ecosystem ho.
 [Cloud Deployment + Monitoring]
 
 ```
+
+💣 Real Impact Areas
+Machine Learning:
+AI-based intrusion detection (real dataset + live data)
+
+**Networks:**
+Real packet capturing & protocol analysis
+
+**Distributed:**
+Parallel vs sequential benchmark graphs
+
+**Cloud:**
+AWS deployment + Docker + CI/CD
+
+**SQA:**
+Industry-grade SRS + testing automation
+
+Compiler:
+Mini DSL (Domain Specific Language)
+
+Part 1: Architecture
+
+Part 2: ML System
+
+Part 3: Distributed Benchmark
+
+Part 4: Cloud Deployment
+
+Part 5: Custom Language
+
+Final: Full Demo Video
