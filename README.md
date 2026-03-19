@@ -6,6 +6,16 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-green.svg)](https://streamlit.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+Tech stack
+
+- Language: Python
+- Backend: FastAPI
+- Frontend: Streamlit / React
+- Database: PostgreSQL
+- Distributed: Spark
+- Cloud: AWS
+- Container: Docker
+
 Ek aisa system banana jo:
 1. Live network traffic monitor kare
 2. AI se attack detect kare
