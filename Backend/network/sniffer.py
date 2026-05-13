@@ -3,6 +3,7 @@ from scapy.layers.inet import IP, TCP, UDP, ICMP
 import csv
 from datetime import datetime
 import os 
+import pandas as pd
 
 global tcp_count, udp_count, icmp_count, other_count
 tcp_count = 0
@@ -70,3 +71,9 @@ def process_packet(packet):
             print(f"Other: {other_count}")
 
 sniff(prn=process_packet, store=False,count=50)  # Capture 100 packets, adjust as needed
+
+
+
+
+
+
