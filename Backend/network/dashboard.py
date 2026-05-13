@@ -7,6 +7,9 @@ st.set_page_config(page_title="Network Traffic Dashboard", layout="wide")
 
 st.title("📡 Mini Network Traffic Dashboard")
 
+# Auto-refresh every 5 seconds
+# st_autorefresh = st.experimental_rerun()
+
 # Check if CSV exists
 csv_file = r"C:\Users\Asad Ali\Desktop\SentinelX\network_traffic.csv"
 if not os.path.exists(csv_file):
@@ -61,4 +64,20 @@ if "Source Port" in df.columns:
 else:
     st.info("Port data not available. Run sniffer with port detection enabled.")
     
-      
+st.subheader("📅 Traffic Over Time")
+if "Time" in df.columns:
+    df["Time"] = pd.to_datetime(df["Time"])
+    traffic_over_time = df.set_index("Time").resample("1Min").size()
+    fig2, ax2 = plt.subplots()
+    traffic_over_time.plot(ax=ax2)
+    plt.xlabel("Time")
+    plt.ylabel("Packet Count")
+    plt.grid()
+    st.pyplot(fig2)
+else:
+    st.info("Time data not available. Run sniffer with timestamp enabled.")
+    
+    
+
+# ---- Auto refresh ----
+st.experimental_rerun()      
