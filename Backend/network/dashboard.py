@@ -1,83 +1,117 @@
-import streamlit as st
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List
+
 import pandas as pd
-import matplotlib.pyplot as plt
-import os
+import plotly.express as px
+import requests
+import streamlit as st
 
-st.set_page_config(page_title="Network Traffic Dashboard", layout="wide")
+st.set_page_config(page_title="SentinelX Security Dashboard", layout="wide")
 
-st.title("📡 Mini Network Traffic Dashboard")
+API_BASE = st.sidebar.text_input("API Base URL", value="http://127.0.0.1:8000")
 
-# Auto-refresh every 5 seconds
-# st_autorefresh = st.experimental_rerun()
+st.title("SentinelX Security Dashboard")
+st.caption("Live traffic, anomaly detection, and model verdicts from the FastAPI backend")
 
-# Check if CSV exists
-csv_file = r"C:\Users\Asad Ali\Desktop\SentinelX\network_traffic.csv"
-if not os.path.exists(csv_file):
-    st.warning("CSV file not found! Run the sniffer first.")
-    st.stop()
 
-# Load data
-df = pd.read_csv(csv_file)
+def fetch_json(path: str) -> Dict[str, Any]:
+    response = requests.get(f"{API_BASE}{path}", timeout=5)
+    response.raise_for_status()
+    return response.json()
 
-# ---- KPIs ----
-st.subheader("📊 Key Metrics")
-total_packets = len(df)
-tcp_count = len(df[df["Protocol"]=="TCP"])
-udp_count = len(df[df["Protocol"]=="UDP"])
-icmp_count = len(df[df["Protocol"]=="ICMP"])
-other_count = len(df[df["Protocol"]=="Other"])
+
+def safe_get(path: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        return fetch_json(path)
+    except Exception as exc:
+        st.sidebar.error(f"API error on {path}: {exc}")
+        return fallback
+
+
+stats = safe_get(
+    "/traffic_stats",
+    {
+        "packets_processed": 0,
+        "predictions_made": 0,
+        "attacks_detected": 0,
+        "normal_traffic": 0,
+        "uncertain": 0,
+        "validation_failed": 0,
+        "attack_rate": 0,
+        "normal_rate": 0,
+        "uncertain_rate": 0,
+        "live_capture_enabled": False,
+        "recent_predictions": [],
+    },
+)
+
+recent_predictions: List[Dict[str, Any]] = stats.get("recent_predictions", [])
 
 col1, col2, col3, col4, col5 = st.columns(5)
-col1.metric("Total Packets", total_packets)
-col2.metric("TCP Packets", tcp_count)
-col3.metric("UDP Packets", udp_count)
-col4.metric("ICMP Packets", icmp_count)
-col5.metric("Other Packets", other_count)
+col1.metric("Packets", stats.get("packets_processed", 0))
+col2.metric("Predictions", stats.get("predictions_made", 0))
+col3.metric("Attacks", stats.get("attacks_detected", 0))
+col4.metric("Normal", stats.get("normal_traffic", 0))
+col5.metric("Uncertain", stats.get("uncertain", 0))
 
-# ---- Protocol Distribution Chart ----
-st.subheader("📈 Protocol Distribution")
-fig, ax = plt.subplots()
-df["Protocol"].value_counts().plot(kind='bar', color=['blue','green','red','gray'], ax=ax)
-plt.xlabel("Protocol")
-plt.ylabel("Count")
-plt.grid(axis='y')
-st.pyplot(fig)
+st.subheader("System Status")
+status_col1, status_col2, status_col3 = st.columns(3)
+status_col1.metric("Live Capture", "ON" if stats.get("live_capture_enabled") else "OFF")
+status_col2.metric("Uptime (s)", stats.get("uptime_seconds", 0))
+status_col3.metric("Validation Failed", stats.get("validation_failed", 0))
 
-# ---- Top IPs ----
-st.subheader("🌐 Top Source & Destination IPs")
-st.write("Top 5 Source IPs:")
-st.table(df["Source IP"].value_counts().head(5))
+st.subheader("Prediction Mix")
+mix_df = pd.DataFrame(
+    [
+        {"Label": "Attack", "Count": stats.get("attacks_detected", 0)},
+        {"Label": "Normal", "Count": stats.get("normal_traffic", 0)},
+        {"Label": "Uncertain", "Count": stats.get("uncertain", 0)},
+    ]
+)
+fig = px.bar(mix_df, x="Label", y="Count", color="Label", text="Count", color_discrete_sequence=["#b42318", "#027a48", "#f79009"])
+fig.update_layout(showlegend=False, height=360, margin=dict(l=20, r=20, t=20, b=20))
+st.plotly_chart(fig, use_container_width=True)
 
-st.write("Top 5 Destination IPs:")
-st.table(df["Destination IP"].value_counts().head(5))
-
-# ---- Top Ports ----
-st.subheader("🔌 Top Destination Ports")
-if "Destination Port" in df.columns:
-    st.table(df["Destination Port"].value_counts().head(5))
+st.subheader("Latest Predictions")
+if recent_predictions:
+    pred_df = pd.DataFrame(recent_predictions)
+    display_cols = [
+        c
+        for c in [
+            "timestamp",
+            "source_ip",
+            "destination_ip",
+            "protocol_type",
+            "service",
+            "predicted_label",
+            "normal_probability",
+            "attack_probability",
+            "confidence",
+            "severity",
+        ]
+        if c in pred_df.columns
+    ]
+    st.dataframe(pred_df[display_cols], use_container_width=True, hide_index=True)
 else:
-    st.info("Port data not available. Run sniffer with port detection enabled.")
- 
-st.subheader("Top Source Ports")  
-if "Source Port" in df.columns:
-    st.table(df["Source Port"].value_counts().head(5))
-else:
-    st.info("Port data not available. Run sniffer with port detection enabled.")
-    
-st.subheader("📅 Traffic Over Time")
-if "Time" in df.columns:
-    df["Time"] = pd.to_datetime(df["Time"])
-    traffic_over_time = df.set_index("Time").resample("1Min").size()
-    fig2, ax2 = plt.subplots()
-    traffic_over_time.plot(ax=ax2)
-    plt.xlabel("Time")
-    plt.ylabel("Packet Count")
-    plt.grid()
-    st.pyplot(fig2)
-else:
-    st.info("Time data not available. Run sniffer with timestamp enabled.")
-    
-    
+    st.info("No live predictions yet. Start the API capture or wait for traffic.")
 
-# ---- Auto refresh ----
-st.experimental_rerun()      
+st.subheader("Recent Activity")
+stats_table = pd.DataFrame(
+    [
+        ["Attack rate", f"{stats.get('attack_rate', 0)}%"],
+        ["Normal rate", f"{stats.get('normal_rate', 0)}%"],
+        ["Uncertain rate", f"{stats.get('uncertain_rate', 0)}%"],
+        ["Last prediction", stats.get("last_prediction_at", "-")],
+        ["Last packet", stats.get("last_packet_at", "-")],
+        ["Last error", stats.get("last_error", "-")],
+    ],
+    columns=["Metric", "Value"],
+)
+st.table(stats_table)
+
+if st.button("Refresh now"):
+    st.rerun()
+
+st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

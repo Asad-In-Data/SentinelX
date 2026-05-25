@@ -76,3 +76,28 @@ Part 4: Cloud Deployment
 Part 5: Custom Language
 
 Final: Full Demo Video
+
+## Run the Live Stack
+
+Backend API:
+
+```bash
+cd Backend/api
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Streamlit dashboard:
+
+```bash
+streamlit run Frontend/app.py
+```
+
+Useful endpoints:
+
+- `GET /health`
+- `GET /predict`
+- `POST /predict`
+- `GET /traffic_stats`
+- `GET /recent_predictions`
+
+The API starts the live packet capture in the background when it can access the network interface. If packet sniffing is blocked on your machine, the API still starts and the dashboard will show the backend status.
