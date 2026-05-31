@@ -101,3 +101,50 @@ Useful endpoints:
 - `GET /recent_predictions`
 
 The API starts the live packet capture in the background when it can access the network interface. If packet sniffing is blocked on your machine, the API still starts and the dashboard will show the backend status.
+
+## Database Migrations (Alembic)
+
+Default database URL is SQLite:
+
+```bash
+sqlite:///./sentinelx.db
+```
+
+Set custom DB URL (example PostgreSQL):
+
+```bash
+export DATABASE_URL="postgresql+psycopg2://USER:PASSWORD@HOST:5432/sentinelx"
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg2://USER:PASSWORD@HOST:5432/sentinelx"
+```
+
+Run migrations:
+
+```bash
+alembic -c alembic.ini upgrade head
+```
+
+Create a new migration from model changes (autogenerate):
+
+```bash
+alembic -c alembic.ini revision --autogenerate -m "describe change"
+```
+
+Check if there are pending schema diffs:
+
+```bash
+alembic -c alembic.ini check
+```
+
+Simple DB admin CLI:
+
+```bash
+python Backend/db/cli.py init-db
+python Backend/db/cli.py migrate
+python Backend/db/cli.py list-predictions --limit 20
+python Backend/db/cli.py show-stats --limit 10
+```
