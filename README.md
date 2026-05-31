@@ -148,3 +148,24 @@ python Backend/db/cli.py migrate
 python Backend/db/cli.py list-predictions --limit 20
 python Backend/db/cli.py show-stats --limit 10
 ```
+
+## Mini DSL
+
+The DSL reads from the database first and falls back to the API when needed.
+
+Examples:
+
+```bash
+python Backend/compiler/cli.py "show threats limit 10"
+python Backend/compiler/cli.py "show traffic limit 5"
+python Backend/compiler/cli.py "show stats"
+python Backend/compiler/cli.py "show latest"
+```
+
+Dashboard support:
+
+- Open the Streamlit dashboard and use the `Mini DSL` section.
+
+Guide:
+
+- [Backend/compiler/DSL_GUIDE.md](Backend/compiler/DSL_GUIDE.md)

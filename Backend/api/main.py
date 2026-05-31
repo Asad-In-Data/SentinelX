@@ -8,7 +8,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from traffic_service import TrafficAnalyzer
+try:
+    # Works when launched as package module: Backend.api.main
+    from .traffic_service import TrafficAnalyzer
+except ImportError:
+    # Works when launched from Backend/api with: uvicorn main:app
+    from traffic_service import TrafficAnalyzer
 
 app = FastAPI(
     title="SentinelX API",
