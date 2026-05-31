@@ -8,11 +8,14 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from queue import Queue, Empty
 
 import joblib
 import pandas as pd
 from scapy.all import sniff
 from scapy.layers.inet import IP
+from Backend.db.database import SessionLocal, create_tables  # type: ignore
+from Backend.db.models import Prediction as PredictionModel, TrafficStats as TrafficStatsModel  # type: ignore
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 ML_DIR = BASE_DIR / "Backend" / "ML"
@@ -64,6 +67,10 @@ class TrafficAnalyzer:
 
         self._load_artifacts()
         self._build_runtime_components()
+        # DB queue and worker for async persistence
+        self.db_queue: Queue = Queue()
+        self.db_worker_thread: Optional[threading.Thread] = None
+        self._db_stop_event = threading.Event()
 
     def _load_artifacts(self) -> None:
         model_dir = ML_DIR / "models"
@@ -91,6 +98,13 @@ class TrafficAnalyzer:
             attack_probability_threshold=0.70,
             attack_class_index=attack_class_index,
         )
+
+        # Ensure DB tables exist
+        try:
+            create_tables()
+        except Exception:
+            # don't block initialization if DB is not reachable yet
+            pass
 
     def encode_categorical_features(self, features_df: pd.DataFrame) -> pd.DataFrame:
         encoded_df = features_df.copy()
@@ -169,6 +183,21 @@ class TrafficAnalyzer:
                 self.stats["uncertain"] += 1
             self.recent_predictions.appendleft(record)
 
+        # enqueue for persistence
+        try:
+            self.db_queue.put_nowait(("prediction", record))
+            # also enqueue a lightweight stats snapshot
+            stats_snapshot = {
+                "total_predictions": self.stats["predictions_made"],
+                "attacks_detected": self.stats["attacks_detected"],
+                "normal_traffic": self.stats["normal_traffic"],
+                "uncertain": self.stats["uncertain"],
+                "uptime_seconds": (datetime.utcnow() - self.started_at).total_seconds(),
+            }
+            self.db_queue.put_nowait(("stats", stats_snapshot))
+        except Exception:
+            pass
+
         return record
 
     def _sniff_loop(self) -> None:
@@ -193,11 +222,74 @@ class TrafficAnalyzer:
         self.stop_event.clear()
         self.sniffer_thread = threading.Thread(target=self._sniff_loop, daemon=True)
         self.sniffer_thread.start()
+        # start DB worker
+        if not self.db_worker_thread or not self.db_worker_thread.is_alive():
+            self._db_stop_event.clear()
+            self.db_worker_thread = threading.Thread(target=self._db_worker_loop, daemon=True)
+            self.db_worker_thread.start()
         return True
 
     def stop(self) -> None:
         self.stop_event.set()
         self.live_capture_enabled = False
+        # stop DB worker
+        try:
+            self._db_stop_event.set()
+            if self.db_worker_thread and self.db_worker_thread.is_alive():
+                self.db_worker_thread.join(timeout=2.0)
+        except Exception:
+            pass
+
+    def _db_worker_loop(self) -> None:
+        """Background worker that persists items from the DB queue."""
+        while not self._db_stop_event.is_set() or not self.db_queue.empty():
+            try:
+                item_type, payload = self.db_queue.get(timeout=1.0)
+            except Empty:
+                continue
+
+            try:
+                session = SessionLocal()
+                if item_type == "prediction":
+                    rec: PredictionRecord = payload
+                    model = PredictionModel(
+                        timestamp=datetime.fromisoformat(rec.timestamp),
+                        source_ip=rec.source_ip,
+                        destination_ip=rec.destination_ip,
+                        protocol_type=rec.protocol_type,
+                        service=rec.service,
+                        predicted_label=rec.predicted_label,
+                        normal_probability=rec.normal_probability,
+                        attack_probability=rec.attack_probability,
+                        confidence=rec.confidence,
+                        severity=rec.severity,
+                        validation_warnings=rec.validation_warnings,
+                        validation_errors=rec.validation_errors,
+                        packet_summary=json.dumps(rec.packet_summary),
+                    )
+                    session.add(model)
+                    session.commit()
+                elif item_type == "stats":
+                    snap = payload
+                    stats_model = TrafficStatsModel(
+                        total_predictions=int(snap.get("total_predictions", 0)),
+                        attacks_detected=int(snap.get("attacks_detected", 0)),
+                        normal_traffic=int(snap.get("normal_traffic", 0)),
+                        uncertain=int(snap.get("uncertain", 0)),
+                        uptime_seconds=float(snap.get("uptime_seconds", 0.0)),
+                    )
+                    session.add(stats_model)
+                    session.commit()
+            except Exception:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+            finally:
+                try:
+                    session.close()
+                except Exception:
+                    pass
 
     def get_traffic_stats(self) -> Dict[str, Any]:
         with self.lock:
