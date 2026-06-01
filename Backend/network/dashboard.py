@@ -102,6 +102,12 @@ def safe_get(path: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
         return fallback
 
 
+def post_json(path: str) -> Dict[str, Any]:
+    response = requests.post(f"{API_BASE}{path}", timeout=5)
+    response.raise_for_status()
+    return response.json()
+
+
 def get_pipeline_status() -> Dict[str, Any]:
     status: Dict[str, Any] = {
         "api_online": False,
@@ -157,12 +163,22 @@ stats = safe_get(
         "normal_rate": 0,
         "uncertain_rate": 0,
         "live_capture_enabled": False,
+        "capture_session_active": False,
+        "capture_started_at": None,
+        "capture_stopped_at": None,
+        "capture_session_seconds": 0,
         "recent_predictions": [],
     },
 )
 
 recent_predictions: List[Dict[str, Any]] = stats.get("recent_predictions", [])
 pipeline_status = get_pipeline_status()
+
+if stats.get("capture_session_active") and not st.session_state.get("capture_session_started_at"):
+    st.session_state["capture_session_started_at"] = stats.get("capture_started_at")
+if not stats.get("capture_session_active") and stats.get("capture_stopped_at"):
+    st.session_state["capture_last_session_seconds"] = stats.get("capture_session_seconds", 0)
+    st.session_state["capture_session_started_at"] = None
 
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Packets", stats.get("packets_processed", 0))
@@ -177,6 +193,49 @@ status_col1.metric("Live Capture", "ON" if stats.get("live_capture_enabled") els
 status_col2.metric("Uptime (s)", stats.get("uptime_seconds", 0))
 status_col3.metric("Validation Failed", stats.get("validation_failed", 0))
 
+capture_col1, capture_col2, capture_col3 = st.columns(3)
+capture_elapsed = 0.0
+started_at = st.session_state.get("capture_session_started_at")
+if started_at and stats.get("capture_session_active"):
+    try:
+        capture_elapsed = (datetime.now() - datetime.fromisoformat(started_at)).total_seconds()
+    except Exception:
+        capture_elapsed = float(stats.get("capture_session_seconds", 0))
+else:
+    capture_elapsed = float(stats.get("capture_session_seconds", st.session_state.get("capture_last_session_seconds", 0)))
+
+capture_col1.metric("Capture Session", "ACTIVE" if stats.get("capture_session_active") else "IDLE")
+capture_col2.metric("Capture Elapsed (s)", round(capture_elapsed, 2))
+capture_col3.metric("Session Started", started_at or stats.get("capture_started_at") or "-")
+
+button_col1, button_col2, button_col3 = st.columns(3)
+if button_col1.button("Start Live Capture"):
+    try:
+        result = post_json("/capture/start")
+        st.session_state["capture_session_started_at"] = result.get("capture_started_at")
+        st.session_state["capture_last_session_seconds"] = 0.0
+        st.success("Live capture started.")
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Could not start live capture: {exc}")
+
+if button_col2.button("Stop Live Capture"):
+    try:
+        result = post_json("/capture/stop")
+        st.session_state["capture_last_session_seconds"] = result.get("capture_session_seconds", 0)
+        st.session_state["capture_session_started_at"] = None
+        st.success("Live capture stopped.")
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Could not stop live capture: {exc}")
+
+if button_col3.button("Restart Backend"):
+    st.session_state["sentinelx_backend_started"] = False
+    st.session_state["sentinelx_backend_ready"] = False
+    st.session_state.pop("sentinelx_backend_error", None)
+    ensure_backend_running()
+    st.rerun()
+
 st.subheader("Pipeline Status")
 pipe_col1, pipe_col2, pipe_col3, pipe_col4 = st.columns(4)
 pipe_col1.metric("API", "ONLINE" if pipeline_status["api_online"] else "OFFLINE")
@@ -186,13 +245,16 @@ pipe_col4.metric("DB Stats Rows", pipeline_status["db_traffic_stats_count"])
 
 pipeline_table = pd.DataFrame(
     [
-        ["DB last prediction", pipeline_status["db_last_prediction_at"]],
-        ["DB last stats", pipeline_status["db_last_stats_at"]],
-        ["API error", pipeline_status["api_error"] or "-"],
-        ["DB error", pipeline_status["db_error"] or "-"],
+        ["Capture active", "YES" if stats.get("capture_session_active") else "NO"],
+        ["Capture elapsed", f"{round(capture_elapsed, 2)}"],
+        ["DB last prediction", str(pipeline_status["db_last_prediction_at"])],
+        ["DB last stats", str(pipeline_status["db_last_stats_at"])],
+        ["API error", str(pipeline_status["api_error"] or "-")],
+        ["DB error", str(pipeline_status["db_error"] or "-")],
     ],
     columns=["Pipeline Check", "Value"],
 )
+pipeline_table["Value"] = pipeline_table["Value"].astype(str)
 st.table(pipeline_table)
 
 st.subheader("Prediction Mix")
