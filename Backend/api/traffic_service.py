@@ -53,6 +53,9 @@ class TrafficAnalyzer:
         self.last_error: Optional[str] = None
         self.live_capture_enabled = False
         self.started_at = datetime.utcnow()
+        self.capture_started_at: Optional[datetime] = None
+        self.capture_stopped_at: Optional[datetime] = None
+        self.capture_last_session_seconds: float = 0.0
         self.recent_predictions: deque[PredictionRecord] = deque(maxlen=100)
         self.stats: Dict[str, Any] = {
             "packets_processed": 0,
@@ -220,6 +223,10 @@ class TrafficAnalyzer:
             return True
 
         self.stop_event.clear()
+        if self.capture_started_at is None or not self.live_capture_enabled:
+            self.capture_started_at = datetime.utcnow()
+            self.capture_stopped_at = None
+            self.capture_last_session_seconds = 0.0
         self.sniffer_thread = threading.Thread(target=self._sniff_loop, daemon=True)
         self.sniffer_thread.start()
         # start DB worker
@@ -232,6 +239,11 @@ class TrafficAnalyzer:
     def stop(self) -> None:
         self.stop_event.set()
         self.live_capture_enabled = False
+        if self.capture_started_at is not None:
+            self.capture_stopped_at = datetime.utcnow()
+            self.capture_last_session_seconds = (
+                self.capture_stopped_at - self.capture_started_at
+            ).total_seconds()
         # stop DB worker
         try:
             self._db_stop_event.set()
@@ -295,9 +307,16 @@ class TrafficAnalyzer:
         with self.lock:
             total_predictions = max(self.stats["predictions_made"], 1)
             uptime_seconds = (datetime.utcnow() - self.started_at).total_seconds()
+            capture_session_seconds = self.capture_last_session_seconds
+            if self.capture_started_at is not None and self.live_capture_enabled:
+                capture_session_seconds = (datetime.utcnow() - self.capture_started_at).total_seconds()
             return {
                 **self.stats,
                 "uptime_seconds": round(uptime_seconds, 2),
+                "capture_session_active": self.live_capture_enabled,
+                "capture_started_at": None if self.capture_started_at is None else self.capture_started_at.isoformat(),
+                "capture_stopped_at": None if self.capture_stopped_at is None else self.capture_stopped_at.isoformat(),
+                "capture_session_seconds": round(capture_session_seconds, 2),
                 "attack_rate": round((self.stats["attacks_detected"] / total_predictions) * 100, 2),
                 "normal_rate": round((self.stats["normal_traffic"] / total_predictions) * 100, 2),
                 "uncertain_rate": round((self.stats["uncertain"] / total_predictions) * 100, 2),

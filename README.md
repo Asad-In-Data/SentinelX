@@ -169,3 +169,35 @@ Dashboard support:
 Guide:
 
 - [Backend/compiler/DSL_GUIDE.md](Backend/compiler/DSL_GUIDE.md)
+
+## CLI-First DSL Mode
+
+If you want to use the DSL without the web dashboard, run:
+
+```bash
+python Backend/compiler/cli.py
+```
+
+Useful commands:
+
+```bash
+SHOW_THREATS
+SHOW_TRAFFIC
+SHOW_IPS
+SHOW_PROTOCOLS
+COUNT_PACKETS
+COUNT_THREATS
+COUNT_IPS
+SHOW_HIGH_RISK
+SHOW_MEDIUM_RISK
+SHOW_LOW_RISK
+SHOW_TCP
+SHOW_UDP
+SHOW_ICMP
+LATEST_THREATS
+LATEST_PACKETS
+TOP_ATTACKERS
+HELP
+VERSION
+STATUS
+```

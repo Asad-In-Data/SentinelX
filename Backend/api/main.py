@@ -103,10 +103,20 @@ def recent_predictions(limit: int = 20) -> Dict[str, Any]:
 @app.post("/capture/start")
 def start_capture() -> Dict[str, Any]:
     analyzer.start()
-    return {"status": "started", "live_capture_enabled": True}
+    return {
+        "status": "started",
+        "live_capture_enabled": True,
+        "capture_started_at": analyzer.get_traffic_stats().get("capture_started_at"),
+    }
 
 
 @app.post("/capture/stop")
 def stop_capture() -> Dict[str, Any]:
     analyzer.stop()
-    return {"status": "stopped", "live_capture_enabled": False}
+    stats = analyzer.get_traffic_stats()
+    return {
+        "status": "stopped",
+        "live_capture_enabled": False,
+        "capture_stopped_at": stats.get("capture_stopped_at"),
+        "capture_session_seconds": stats.get("capture_session_seconds", 0),
+    }
