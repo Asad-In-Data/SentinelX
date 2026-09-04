@@ -4,7 +4,16 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-green.svg)](https://streamlit.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+⚠️ License & Usage
+
+© 2026 Asad Ali — All Rights Reserved
+
+This repository is publicly available for viewing and portfolio purposes.
+
+The source code, architecture, documentation, and original implementations are the intellectual property of the author.
+
+No permission is granted to copy, modify, redistribute, reproduce, or use this project or its source code for personal, academic, commercial, or derivative projects without explicit written permission from the author.
 
 Tech stack
 
